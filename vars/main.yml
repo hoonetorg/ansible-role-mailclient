@@ -13,3 +13,10 @@ mailclient_os_packages:
   Debian:
     evolution: [evolution, libglib2.0-bin, dbus-daemon, libsecret-tools, dconf-cli]
     thunderbird: [thunderbird]
+
+# desktop entries per OS family and client (default_client; used if mailclient.desktop_ids doesn't set the client);
+# other OS families: set desktop_ids in the inventory
+mailclient_os_desktop_ids:
+  Suse:
+    evolution: org.gnome.Evolution.desktop
+    thunderbird: thunderbird-esr.desktop

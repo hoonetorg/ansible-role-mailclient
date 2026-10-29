@@ -14,6 +14,24 @@
     fail_msg: "mailclient: clients must be evolution and/or thunderbird; every entry in users needs a unique user"
     quiet: true
 
+- name: Set default mail client
+  ansible.builtin.set_fact:
+    mailclient_default_client: >-
+      {{ mailclient_final.clients | first | default('') if mailclient_final.default_client is none
+         else mailclient_final.default_client }}
+    mailclient_desktop_ids: >-
+      {{ mailclient_os_desktop_ids[ansible_facts.os_family] | default({}) | combine(mailclient_final.desktop_ids) }}
+
+- name: Assert default mail client
+  ansible.builtin.assert:
+    that:
+      - mailclient_default_client == '' or mailclient_default_client in mailclient_final.clients
+      - mailclient_default_client == '' or mailclient_default_client in mailclient_desktop_ids
+    fail_msg: >-
+      mailclient: default_client must be one of clients ({{ mailclient_final.clients | join(', ') }}) or '' and needs
+      a desktop entry (desktop_ids) - got {{ mailclient_default_client | to_json }}
+    quiet: true
+
 # no loop: a failed loop item would be printed with all its account data; this way only the filter's message
 # is shown (user and account id); the resolved accounts are built per user with no_log
 - name: Validate accounts

@@ -44,22 +44,6 @@
     quiet: true
   when: mailclient_autoconfig_get.rc == 0
 
-- name: Look for ~/.config
-  ansible.builtin.stat:
-    path: "{{ mailclient_home }}/.config"
-    get_checksum: false
-  register: mailclient_config_dir
-
-# only if missing (new user): an existing ~/.config is left as it is
-- name: Create ~/.config
-  ansible.builtin.file:
-    path: "{{ mailclient_home }}/.config"
-    state: directory
-    owner: "{{ mailclient_user.user }}"
-    group: "{{ mailclient_gid }}"
-    mode: "0700"
-  when: not mailclient_config_dir.stat.exists
-
 - name: Create Evolution autoconfig directory
   ansible.builtin.file:
     path: "{{ mailclient_autoconfig_dir }}"
@@ -150,4 +134,25 @@
     - mailclient_current in ['system', '']
       or (mailclient_current is match('mailclient-')
           and mailclient_current not in mailclient_evolution_sources | map(attribute='uid'))
+  notify: mailclient evolution note
+
+# Evolution asks at every start to become the default mail client unless it is; with default_client the inventory
+# decides, so no question (also when Thunderbird is the default)
+- name: Read Evolution's default mail client check
+  ansible.builtin.command:
+    argv: "{{ mailclient_gsettings + ['get', 'org.gnome.evolution.mail', 'prompt-check-if-default-mailer'] }}"
+  register: mailclient_mailer_check_get
+  changed_when: false
+  check_mode: false
+  failed_when: mailclient_mailer_check_get.rc != 0 and not ansible_check_mode
+  when: mailclient_default_client != ''
+
+- name: Switch off Evolution's default mail client check
+  ansible.builtin.command:
+    argv: "{{ mailclient_gsettings + ['set', 'org.gnome.evolution.mail', 'prompt-check-if-default-mailer', 'false'] }}"
+  changed_when: true
+  when:
+    - mailclient_default_client != ''
+    - mailclient_mailer_check_get.rc == 0
+    - mailclient_mailer_check_get.stdout | trim != 'false'
   notify: mailclient evolution note

@@ -1,0 +1,8 @@
+---
+# default_client '' leaves the user's mailto default and Evolution's question alone
+mailclient:
+  default_client: ''
+  users:
+    - user: teste
+      accounts:
+        - {id: frank, address: frank@example.org, provider: united-domains, login: exampleorg-0001}

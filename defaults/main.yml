@@ -5,6 +5,12 @@ mailclient_defaults:
   clients: [evolution, thunderbird]
   # packages per client; empty: from vars/main.yml for the OS family (Suse: evolution, MozillaThunderbird)
   packages: {}
+  # client for mailto: links (the user's ~/.config/mimeapps.list): evolution | thunderbird; unset: the first of
+  # clients; '' = leave it to the user. Set: neither client asks at start to become the default (the inventory
+  # decides; a change in GNOME Settings is set back at the next run)
+  default_client:
+  # desktop entry per client; empty: from vars/main.yml for the OS family
+  desktop_ids: {}
 
   # mail/calendar/contacts providers (public server data only); accounts refer to them with `provider`, the
   # inventory can add more (e.g. a test server)

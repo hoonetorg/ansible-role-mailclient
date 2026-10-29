@@ -14,6 +14,36 @@
          | mailclient_accounts(mailclient_final.providers, mailclient_final.folders, mailclient_user.user) }}
   no_log: true
 
+- name: Look for ~/.config
+  ansible.builtin.stat:
+    path: "{{ mailclient_home }}/.config"
+    get_checksum: false
+  register: mailclient_config_dir
+
+# only if missing (new user): an existing ~/.config is left as it is
+- name: Create ~/.config
+  ansible.builtin.file:
+    path: "{{ mailclient_home }}/.config"
+    state: directory
+    owner: "{{ mailclient_user.user }}"
+    group: "{{ mailclient_gid }}"
+    mode: "0700"
+  when: not mailclient_config_dir.stat.exists
+
+# what GNOME Settings → Default Apps → Mail writes; other entries of the file stay
+- name: Set the default mail client for mailto links
+  community.general.ini_file:
+    path: "{{ mailclient_home }}/.config/mimeapps.list"
+    section: Default Applications
+    option: x-scheme-handler/mailto
+    value: "{{ mailclient_desktop_ids[mailclient_default_client] }}"
+    no_extra_spaces: true
+    create: true
+    owner: "{{ mailclient_user.user }}"
+    group: "{{ mailclient_gid }}"
+    mode: "0644"
+  when: mailclient_default_client != ''
+
 - name: Configure Evolution
   ansible.builtin.include_tasks: evolution.yml
   when: "'evolution' in mailclient_final.clients"

@@ -47,6 +47,8 @@ user_pref("mail.server.{{ srv }}.check_new_mail", true);
 user_pref("mail.server.{{ srv }}.delete_model", 2);
 user_pref("mail.server.{{ srv }}.using_subscription", false);
 user_pref("mail.server.{{ srv }}.moveOnSpam", true);
+{# 1 = spamActionTargetFolder; the default 0 always takes the account's "Junk" #}
+user_pref("mail.server.{{ srv }}.moveTargetMode", 1);
 user_pref("mail.server.{{ srv }}.spamActionTargetAccount", {{ base | to_json }});
 user_pref("mail.server.{{ srv }}.spamActionTargetFolder", {{ (base ~ '/' ~ a.folders.junk) | to_json }});
 user_pref("mail.server.{{ srv }}.whiteListAbURI", {{ abooks | to_json }});
@@ -105,3 +107,8 @@ user_pref("mail.smtp.defaultserver", {{ ('smtp_' ~ mailclient_accounts[0].id) | 
 // message list: sorted by date, newest on top (folders without own view settings, i.e. all in a new profile)
 user_pref("mailnews.default_sort_type", 18);
 user_pref("mailnews.default_sort_order", 2);
+{% if mailclient_default_client %}
+
+// default mail client set by Ansible (default_client): no question at start
+user_pref("mail.shell.checkDefaultClient", false);
+{% endif %}

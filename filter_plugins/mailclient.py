@@ -9,6 +9,8 @@ from ansible.errors import AnsibleFilterError
 
 SECURITY = ("ssl", "starttls")
 COLOR = re.compile(r"#[0-9a-fA-F]{6}")
+# would break Evolution's source files (key files: \ is an escape) and Thunderbird's user.js
+BAD_TEXT = re.compile(r"[\x00-\x1f\x7f\\]")
 
 
 def _fail(where, msg):
@@ -70,6 +72,9 @@ def mailclient_accounts(accounts, providers, folder_defaults, user=""):
         if aid in ids:
             _fail(where, "account id used twice")
         ids.add(aid)
+        for key in ("label", "name"):
+            if BAD_TEXT.search(str(account.get(key) or "")):
+                _fail(where, "%s must not contain line breaks, control characters or backslashes" % key)
         address = str(account.get("address") or "")
         if not address:
             _fail(where, "address missing")

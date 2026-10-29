@@ -15,9 +15,16 @@ calendar and task list (CalDAV), address book (CardDAV). Same behaviour in both 
   colour for calendars it didn't add itself (they copy it only in their own "add calendar" dialog, and never
   follow later changes on the server - checked up to Evolution 3.62 / Thunderbird 158); read them once with
   `helpers/mailclient-colors.py`
+- default mail client for `mailto:` links (`default_client`, default: the first of `clients`): written to the
+  user's `~/.config/mimeapps.list` (what GNOME Settings → Default Apps writes; other entries stay); neither client
+  asks at start to become the default. The inventory decides: a change in GNOME Settings is set back at the next
+  run (`default_client: ''` leaves it to the user)
+- Evolution: the contacts of the server address books are in the "Birthdays & Anniversaries" calendar
 
 No password is stored in any file: each client asks once per account (Evolution: GNOME keyring, Thunderbird:
-its own password manager).
+its own password manager). Thunderbird asks for a calendar's login in a plain dialog that shows only the server,
+without the user name (it sends no login until one is saved): enter the DAV user (`dav_user`, e.g. the Infomaniak
+short name; default: the mail login) and the password, and let Thunderbird save it - once per server.
 
 The users must exist (run after ansible-role-user). Only the listed users are touched.
 
@@ -42,7 +49,9 @@ The role **stops** (fails, changes nothing for that user) when:
 - `~/.thunderbird` already holds another profile or unknown content (existing mail data)
 - `autoconfig-directory` is already set to another directory (reset it as the user to hand it over:
   `gsettings reset org.gnome.evolution-data-server autoconfig-directory`)
-- an account is invalid (id not `[a-z0-9]+` or twice, no address, unknown provider, no imap/smtp)
+- an account is invalid (id not `[a-z0-9]+` or twice, no address, unknown provider, no imap/smtp, `label` or
+  `name` with a line break or a backslash, colour not `"#rrggbb"`)
+- `default_client` is not one of `clients` (or has no desktop entry for the OS family)
 
 Not done: removing a user from `users` or a client from `clients` leaves that user's files/packages in place.
 
@@ -109,6 +118,8 @@ came from, the request (Authorization redacted) and the answer, on stderr; the p
 mailclient:
   clients: [evolution, thunderbird]   # default; or one of them
   # packages: {thunderbird: [MozillaThunderbird]}   # default: vars/main.yml per OS family
+  # default_client: evolution         # mailto: links; default: the first of clients; '' = leave it to the user
+  # desktop_ids: {evolution: org.gnome.Evolution.desktop}   # default: vars/main.yml per OS family
   no_log: true                        # default; false shows file diffs incl. account data (debugging, fake data)
   # providers: {...}                  # add providers (merged with the defaults: infomaniak, united-domains)
   # folders: {sent: Sent, drafts: Drafts, archive: Archive, junk: Junk, templates: Templates}   # defaults
@@ -163,7 +174,9 @@ mailclient:
 ```
 
 Folder names of the real providers can't be verified without an account: check them once in the client (e.g.
-`Junk` vs `Spam`) and set `folders` if they differ.
+`Junk` vs `Spam`) and set `folders` if they differ. Folders below the inbox (some servers keep all special folders
+there): full path with `/` as separator, whatever the server uses, e.g. `folders: {sent: INBOX/Sent, junk:
+INBOX/Spam}` - both clients write folder paths with `/`.
 
 ## Tests
 
@@ -177,7 +190,8 @@ Runs the role in a throwaway Leap 16.1 container (deleted afterwards, `--rm`) wi
 `changed=0`, check mode, account removal, stops (existing Thunderbird profile, foreign autoconfig directory,
 invalid accounts), no account data in the output (and the negative control with `no_log: false`), the reset
 helper (dry run, stops while Thunderbird runs / unconfirmed, deletes exactly its paths, backup, then the role
-recreates everything), separate task list URL and colours, the colour helper against a small DAV stub.
+recreates everything), separate task list URL and colours, the colour helper against a small DAV stub, the
+default mail client (new and existing `mimeapps.list`, `default_client: ''`, not in `clients`), the `label` check.
 
 The clients themselves (do they show the accounts, folders, calendars?) are checked by hand with fake accounts
 against a local test server: repo `mailtestserver`.

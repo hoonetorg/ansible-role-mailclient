@@ -58,6 +58,12 @@ chown -R testc:testc /home/testc/.thunderbird
 runuser -u testd -- env -i HOME=/home/testd PATH=/usr/bin:/bin dbus-run-session -- \
   gsettings set "$schema" "$key" /srv/other >/dev/null 2>&1
 
+# testb: own default apps, mail with Thunderbird
+install -d -o testb -g testb -m 0700 /home/testb/.config
+printf '[Default Applications]\ntext/html=firefox.desktop\nx-scheme-handler/mailto=thunderbird-esr.desktop\n' \
+  >/home/testb/.config/mimeapps.list
+chown testb:testb /home/testb/.config/mimeapps.list
+
 A=/home/testa/.config/evolution-autoconfig
 B=/home/testb/.config/evolution-autoconfig
 TA=/home/testa/.thunderbird
@@ -92,6 +98,8 @@ check "alice: task list on the calendar URL" grep -q '^\[Task List\]$' "$A/mailc
 check "alice: address book" \
   grep -Pzq 'Parent=carddav-stub\n(.*\n)*ResourcePath=/alice@example.org/contacts/\n\n\[Address Book\]\nBackendName=carddav' \
   "$A/mailclient-contacts-alice.source"
+check "alice: address book in the birthdays calendar" \
+  grep -Pzq '\nBackendName=carddav\n\n\[Contacts Backend\]\nIncludeMe=true\n\n\[Autoconfig\]' "$A/mailclient-contacts-alice.source"
 check "bob: own servers, SMTP SSL 465, junk folder Spam, label = address" \
   bash -c "grep -q '^RealJunkPath=Spam$' $A/mailclient-mail-bob.source &&
            grep -Pzq 'Port=465\n(.*\n)*Method=ssl-on-alternate-port' $A/mailclient-mail-bob-transport.source &&
@@ -136,6 +144,18 @@ check "TB user.js: default calendar alice, newest message on top" \
            test \$(grep -c calendar-main-default $TA/default/user.js) = 1 &&
            grep -qF 'user_pref(\"mailnews.default_sort_type\", 18);' $TA/default/user.js &&
            grep -qF 'user_pref(\"mailnews.default_sort_order\", 2);' $TA/default/user.js"
+check "TB user.js: junk to the configured folder (target mode folder), no default client question" \
+  bash -c "grep -qF 'user_pref(\"mail.server.server_bob.moveTargetMode\", 1);' $TA/default/user.js &&
+           grep -qF 'user_pref(\"mail.shell.checkDefaultClient\", false);' $TA/default/user.js"
+check "testa: mailto → Evolution in a new mimeapps.list, owned by testa" \
+  bash -c 'test "$(grep -v "^$" /home/testa/.config/mimeapps.list)" = "[Default Applications]
+x-scheme-handler/mailto=org.gnome.Evolution.desktop" && test "$(stat -c %U /home/testa/.config/mimeapps.list)" = testa'
+check "testb: mailto → Evolution, own entries kept" \
+  bash -c 'grep -qx "x-scheme-handler/mailto=org.gnome.Evolution.desktop" /home/testb/.config/mimeapps.list &&
+           grep -qx "text/html=firefox.desktop" /home/testb/.config/mimeapps.list &&
+           test "$(grep -c mailto /home/testb/.config/mimeapps.list)" = 1'
+check "testa: Evolution doesn't ask to become the default" \
+  test "$(gs testa get org.gnome.evolution.mail prompt-check-if-default-mailer)" = false
 check "TB files owned by the user" test "$(stat -c %U "$TA" "$TA"/* "$TA"/default/* | sort -u)" = testa
 check "no account data in the output (no_log)" not grep -Eq '@example\.|AB12345|exampleorg' <<<"$out"
 check "restart notes shown" bash -c 'grep -q "evolution --force-shutdown" <<<"$0" && grep -q "next start of Thunderbird" <<<"$0"' "$out"
@@ -143,11 +163,11 @@ show_on_fail "$f"
 
 echo "== 2. second run: nothing changes"
 f=$fail
-sums=$(cat "$A"/* "$TA"/*.ini "$TA"/default/user.js | sha256sum)
+sums=$(cat "$A"/* "$TA"/*.ini "$TA"/default/user.js /home/testa/.config/mimeapps.list | sha256sum)
 run_role base.yml
 check "run ok" test "$rc" = 0
 check "changed=0" test "$(recap changed)" = 0
-check "files unchanged" test "$(cat "$A"/* "$TA"/*.ini "$TA"/default/user.js | sha256sum)" = "$sums"
+check "files unchanged" test "$(cat "$A"/* "$TA"/*.ini "$TA"/default/user.js /home/testa/.config/mimeapps.list | sha256sum)" = "$sums"
 show_on_fail "$f"
 
 echo "== 3. check mode"
@@ -314,6 +334,25 @@ kill "$stub"; wait "$stub" 2>/dev/null
 run_role bad-color.yml
 check "invalid colour: run fails with message" \
   bash -c 'test "$0" != 0 && grep -q "teste/frank: color must be" <<<"$1"' "$rc" "$out"
+show_on_fail "$f"
+
+echo "== 11. default_client '' / not in clients, label with a backslash"
+f=$fail
+install -d -o teste -g teste -m 0700 /home/teste/.config
+printf '[Default Applications]\nx-scheme-handler/mailto=thunderbird-esr.desktop\n' >/home/teste/.config/mimeapps.list
+chown teste:teste /home/teste/.config/mimeapps.list
+run_role noclient.yml
+check "run ok" test "$rc" = 0
+check "mimeapps.list untouched" \
+  test "$(cat /home/teste/.config/mimeapps.list)" = "$(printf '[Default Applications]\nx-scheme-handler/mailto=thunderbird-esr.desktop')"
+check "Evolution still asks" test "$(gs teste get org.gnome.evolution.mail prompt-check-if-default-mailer)" = true
+check "Thunderbird still asks" not grep -q checkDefaultClient /home/teste/.thunderbird/default/user.js
+run_role bad-default.yml
+check "default_client not in clients: run fails with message" \
+  bash -c 'test "$0" != 0 && grep -q "default_client must be one of clients (evolution)" <<<"$1"' "$rc" "$out"
+run_role bad-label.yml
+check "label with a backslash: run fails with message" \
+  bash -c 'test "$0" != 0 && grep -q "teste/frank: label must not contain line breaks" <<<"$1"' "$rc" "$out"
 show_on_fail "$f"
 
 echo

@@ -1,0 +1,6 @@
+---
+mailclient:
+  users:
+    - user: teste
+      accounts:
+        - {id: frank, label: 'Frank\Work', address: frank@example.org, provider: united-domains}

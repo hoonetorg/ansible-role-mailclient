@@ -1,0 +1,5 @@
+---
+mailclient:
+  clients: [evolution]
+  default_client: thunderbird
+  users: []
