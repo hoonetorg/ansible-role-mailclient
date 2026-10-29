@@ -1,0 +1,17 @@
+---
+# base.yml without bob (account removal)
+mailclient:
+  providers:
+    mailtestserver:
+      imap: {host: localhost, port: 10993, security: ssl}
+      smtp: {host: localhost, port: 10587, security: starttls}
+      calendar_url: "https://localhost:15232/{address}/calendar/"
+      contacts_url: "https://localhost:15232/{address}/contacts/"
+  users:
+    - user: testa
+      accounts:
+        - id: alice
+          label: Alice (test)
+          name: Alice Example
+          address: alice@example.org
+          provider: mailtestserver

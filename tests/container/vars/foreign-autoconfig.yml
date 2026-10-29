@@ -1,0 +1,7 @@
+---
+mailclient:
+  clients: [evolution]
+  users:
+    - user: testd
+      accounts:
+        - {id: erin, address: erin@example.org, provider: united-domains, login: exampleorg-0002}

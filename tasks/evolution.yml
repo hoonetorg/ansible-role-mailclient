@@ -1,0 +1,153 @@
+---
+# The account sources go to ~/.config/evolution-autoconfig (only this role writes there) and GSettings
+# org.gnome.evolution-data-server autoconfig-directory points evolution-data-server to it. At its next start
+# evolution-source-registry copies them to ~/.config/evolution/sources/, replaces its copy whenever the Revision
+# of a file changes and deletes its copy when the file is gone.
+
+- name: Check for a session bus of the user (logged in)
+  ansible.builtin.stat:
+    path: "/run/user/{{ mailclient_uid }}/bus"
+    get_checksum: false
+  register: mailclient_bus
+
+# gsettings as the user with a clean environment (runuser keeps root's HOME): on the bus of the running session
+# (its dconf-service stores the value and tells the running apps), else on a temporary bus (dbus-run-session;
+# its own dconf-service writes ~/.config/dconf/user, nothing else is running that could overwrite it)
+- name: Set Evolution paths and gsettings command
+  ansible.builtin.set_fact:
+    mailclient_autoconfig_dir: "{{ mailclient_home }}/.config/evolution-autoconfig"
+    mailclient_gsettings: >-
+      {{ ['runuser', '-u', mailclient_user.user, '--', 'env', '-i', 'HOME=' ~ mailclient_home,
+          'USER=' ~ mailclient_user.user, 'LOGNAME=' ~ mailclient_user.user, 'PATH=/usr/bin:/bin']
+         + (['XDG_RUNTIME_DIR=/run/user/' ~ mailclient_uid,
+             'DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/' ~ mailclient_uid ~ '/bus', 'gsettings']
+            if mailclient_bus.stat.exists else ['dbus-run-session', '--', 'gsettings']) }}
+
+# in check mode the schema may not be installed yet
+- name: Read Evolution autoconfig-directory
+  ansible.builtin.command:
+    argv: "{{ mailclient_gsettings + ['get', 'org.gnome.evolution-data-server', 'autoconfig-directory'] }}"
+  register: mailclient_autoconfig_get
+  changed_when: false
+  check_mode: false
+  failed_when: mailclient_autoconfig_get.rc != 0 and not ansible_check_mode
+
+# someone else (the user, another tool) uses autoconfig: don't take it over
+- name: Assert autoconfig-directory is unset or ours
+  ansible.builtin.assert:
+    that:
+      - mailclient_autoconfig_get.stdout | trim in ["''", "'" ~ mailclient_autoconfig_dir ~ "'"]
+    fail_msg: >-
+      mailclient {{ mailclient_user.user }}: GSettings org.gnome.evolution-data-server autoconfig-directory is
+      already {{ mailclient_autoconfig_get.stdout | trim }} - not taken over. To let this role manage it, reset it
+      as the user: gsettings reset org.gnome.evolution-data-server autoconfig-directory
+    quiet: true
+  when: mailclient_autoconfig_get.rc == 0
+
+- name: Look for ~/.config
+  ansible.builtin.stat:
+    path: "{{ mailclient_home }}/.config"
+    get_checksum: false
+  register: mailclient_config_dir
+
+# only if missing (new user): an existing ~/.config is left as it is
+- name: Create ~/.config
+  ansible.builtin.file:
+    path: "{{ mailclient_home }}/.config"
+    state: directory
+    owner: "{{ mailclient_user.user }}"
+    group: "{{ mailclient_gid }}"
+    mode: "0700"
+  when: not mailclient_config_dir.stat.exists
+
+- name: Create Evolution autoconfig directory
+  ansible.builtin.file:
+    path: "{{ mailclient_autoconfig_dir }}"
+    state: directory
+    owner: "{{ mailclient_user.user }}"
+    group: "{{ mailclient_gid }}"
+    mode: "0700"
+
+- name: Set Evolution sources
+  ansible.builtin.set_fact:
+    mailclient_evolution_sources: "{{ mailclient_accounts | mailclient_evolution_sources }}"
+  no_log: true
+
+# Revision = hash of the content: evolution-source-registry replaces its copy exactly when something changed
+- name: Write Evolution sources
+  ansible.builtin.copy:
+    content: "{{ mailclient_body ~ '\n\n[Autoconfig]\nRevision=' ~ (mailclient_body | hash('sha256'))[:16] ~ '\n' }}"
+    dest: "{{ mailclient_autoconfig_dir }}/{{ item.uid }}.source"
+    owner: "{{ mailclient_user.user }}"
+    group: "{{ mailclient_gid }}"
+    mode: "0600"
+  vars:
+    mailclient_body: >-
+      {{ lookup('ansible.builtin.template', 'evolution/' ~ item.template ~ '.source.j2',
+                template_vars={'source': item}) | trim }}
+  loop: "{{ mailclient_evolution_sources }}"
+  loop_control:
+    label: "{{ item.uid }}"
+  no_log: "{{ mailclient_final.no_log }}"
+  diff: "{{ not mailclient_final.no_log }}"
+  notify: mailclient evolution note
+
+- name: Find Evolution sources of this role
+  ansible.builtin.find:
+    paths: "{{ mailclient_autoconfig_dir }}"
+    patterns: "mailclient-*.source"
+  register: mailclient_autoconfig_files
+
+# account removed from the inventory → its files go, evolution-source-registry then deletes its copies
+- name: Remove Evolution sources of removed accounts
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: >-
+    {{ mailclient_autoconfig_files.files | map(attribute='path')
+       | reject('in', mailclient_evolution_sources
+                      | map(attribute='uid') | map('regex_replace', '^(.*)$', mailclient_autoconfig_dir ~ '/\1.source')
+                      | list)
+       | list }}
+  loop_control:
+    label: "{{ item | basename }}"
+  notify: mailclient evolution note
+
+- name: Point Evolution to the autoconfig directory
+  ansible.builtin.command:
+    argv: >-
+      {{ mailclient_gsettings + ['set', 'org.gnome.evolution-data-server', 'autoconfig-directory',
+                                 mailclient_autoconfig_dir] }}
+  changed_when: true
+  when: mailclient_autoconfig_get.stdout | trim == "''"
+  notify: mailclient evolution note
+
+# defaults (mail account/identity, calendar, task list, address book) = the first account that has one; set only
+# while Evolution's own default is in place ('system', empty) or a source of this role that is gone (account
+# removed) - a default the user chose in Evolution stays
+- name: Read Evolution default sources
+  ansible.builtin.command:
+    argv: "{{ mailclient_gsettings + ['list-recursively', 'org.gnome.Evolution.DefaultSources'] }}"
+  register: mailclient_default_sources_get
+  changed_when: false
+  check_mode: false
+  failed_when: mailclient_default_sources_get.rc != 0 and not ansible_check_mode
+
+- name: Set Evolution default sources
+  ansible.builtin.command:
+    argv: "{{ mailclient_gsettings + ['set', 'org.gnome.Evolution.DefaultSources', item.key, item.value] }}"
+  changed_when: true
+  loop: "{{ mailclient_evolution_sources | mailclient_evolution_defaults | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    mailclient_current: >-
+      {{ mailclient_default_sources_get.stdout
+         | regex_search('(?m)^\S+ ' ~ item.key ~ " '(.*)'$", '\1') | default([''], true) | first }}
+  when:
+    - mailclient_default_sources_get.rc == 0
+    - mailclient_current != item.value
+    - mailclient_current in ['system', '']
+      or (mailclient_current is match('mailclient-')
+          and mailclient_current not in mailclient_evolution_sources | map(attribute='uid'))
+  notify: mailclient evolution note

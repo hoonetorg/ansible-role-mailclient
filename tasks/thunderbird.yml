@@ -1,0 +1,73 @@
+---
+# Fixed profile ~/.thunderbird/default: profiles.ini/installs.ini only written when missing (Thunderbird rewrites
+# them itself), user.js always (Thunderbird applies it at every start). An existing ~/.thunderbird with another
+# profile or unknown content is not touched (existing mail data).
+
+- name: Look for ~/.thunderbird
+  ansible.builtin.stat:
+    path: "{{ mailclient_home }}/.thunderbird"
+    get_checksum: false
+  register: mailclient_tb_dir
+
+- name: Look for Thunderbird's profile list
+  ansible.builtin.stat:
+    path: "{{ mailclient_home }}/.thunderbird/profiles.ini"
+    get_checksum: false
+  register: mailclient_tb_profiles
+
+- name: Read Thunderbird's profile list
+  ansible.builtin.slurp:
+    src: "{{ mailclient_home }}/.thunderbird/profiles.ini"
+  register: mailclient_tb_profiles_content
+  when: mailclient_tb_profiles.stat.exists
+
+- name: Look for other content in ~/.thunderbird
+  ansible.builtin.find:
+    paths: "{{ mailclient_home }}/.thunderbird"
+    file_type: any
+    hidden: true
+  register: mailclient_tb_content
+  when: mailclient_tb_dir.stat.exists and not mailclient_tb_profiles.stat.exists
+
+- name: Assert ~/.thunderbird is new or ours
+  ansible.builtin.assert:
+    that: >-
+      (mailclient_tb_profiles_content.content | b64decode is search('(?m)^Path=default\s*$'))
+      if mailclient_tb_profiles.stat.exists else (mailclient_tb_content.matched | default(0) == 0)
+    fail_msg: >-
+      mailclient {{ mailclient_user.user }}: {{ mailclient_home }}/.thunderbird already holds another Thunderbird
+      profile or unknown content - not touched (existing mail data). Move it away (or delete it) to let this
+      role create the profile.
+    quiet: true
+
+- name: Create Thunderbird profile directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ mailclient_user.user }}"
+    group: "{{ mailclient_gid }}"
+    mode: "0700"
+  loop:
+    - "{{ mailclient_home }}/.thunderbird"
+    - "{{ mailclient_home }}/.thunderbird/default"
+
+- name: Write Thunderbird profile list
+  ansible.builtin.template:
+    src: "thunderbird/{{ item }}.j2"
+    dest: "{{ mailclient_home }}/.thunderbird/{{ item }}"
+    owner: "{{ mailclient_user.user }}"
+    group: "{{ mailclient_gid }}"
+    mode: "0600"
+    force: false
+  loop: [profiles.ini, installs.ini]
+
+- name: Write Thunderbird user.js
+  ansible.builtin.template:
+    src: thunderbird/user.js.j2
+    dest: "{{ mailclient_home }}/.thunderbird/default/user.js"
+    owner: "{{ mailclient_user.user }}"
+    group: "{{ mailclient_gid }}"
+    mode: "0600"
+  no_log: "{{ mailclient_final.no_log }}"
+  diff: "{{ not mailclient_final.no_log }}"
+  notify: mailclient thunderbird note

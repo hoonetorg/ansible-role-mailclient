@@ -1,0 +1,10 @@
+---
+# the clients read the new settings only at their next start; running clients of a logged-in user are not
+# stopped by the role
+- name: mailclient evolution note
+  ansible.builtin.debug:
+    msg: "Evolution accounts changed: active after 'evolution --force-shutdown' (or log out/in) and starting Evolution"
+
+- name: mailclient thunderbird note
+  ansible.builtin.debug:
+    msg: "Thunderbird accounts changed: active at the next start of Thunderbird"

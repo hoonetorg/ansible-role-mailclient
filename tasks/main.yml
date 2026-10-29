@@ -1,0 +1,39 @@
+---
+- name: Build final mailclient configuration
+  ansible.builtin.set_fact:
+    mailclient_final: "{{ mailclient_defaults | combine(mailclient | default({}), recursive=True) }}"
+  no_log: true
+
+- name: Assert mailclient settings
+  ansible.builtin.assert:
+    that:
+      - mailclient_final.clients | difference(['evolution', 'thunderbird']) | length == 0
+      - mailclient_final.users | map(attribute='user', default='') | select | list | length
+        == mailclient_final.users | length
+      - mailclient_final.users | map(attribute='user') | unique | list | length == mailclient_final.users | length
+    fail_msg: "mailclient: clients must be evolution and/or thunderbird; every entry in users needs a unique user"
+    quiet: true
+
+# no loop: a failed loop item would be printed with all its account data; this way only the filter's message
+# is shown (user and account id); the resolved accounts are built per user with no_log
+- name: Validate accounts
+  ansible.builtin.assert:
+    that:
+      - mailclient_final.users | mailclient_validate(mailclient_final.providers, mailclient_final.folders)
+    quiet: true
+
+- name: Install mail clients
+  ansible.builtin.package:
+    name: >-
+      {{ mailclient_final.clients
+         | map('extract', mailclient_os_packages[ansible_facts.os_family] | default({})
+               | combine(mailclient_final.packages))
+         | flatten }}
+    state: present
+
+- name: Configure mail clients per user
+  ansible.builtin.include_tasks: user.yml
+  loop: "{{ mailclient_final.users }}"
+  loop_control:
+    loop_var: mailclient_user
+    label: "{{ mailclient_user.user }}"

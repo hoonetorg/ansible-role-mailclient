@@ -1,0 +1,6 @@
+---
+mailclient:
+  users:
+    - user: teste
+      accounts:
+        - {id: frank, address: frank@example.org, provider: nosuchprovider}

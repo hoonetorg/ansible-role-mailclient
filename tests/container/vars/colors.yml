@@ -1,0 +1,16 @@
+---
+# fake account with a separate task list URL and own colours (DAV stub in the container, plain http)
+mailclient:
+  users:
+    - user: testf
+      accounts:
+        - id: gina
+          label: Gina
+          address: gina@example.org
+          provider: united-domains
+          login: exampleorg-0004
+          dav_user: testdav
+          calendar_url: "http://127.0.0.1:18080/cal/"
+          tasks_url: "http://127.0.0.1:18080/tasks/"
+          color: "#112233"
+          tasks_color: "#AABBCC"

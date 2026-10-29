@@ -1,0 +1,107 @@
+{#
+  Thunderbird applies user.js at every start: the accounts, outgoing servers, calendars and address books below
+  always come back as defined here; accounts added by hand drop out of the account list at the next start.
+  Same behaviour as Evolution: no Trash (delete = remove at once), all folders (not only subscribed ones), replies
+  in the folder of the original message, junk to the junk folder on the server.
+#}
+// managed by Ansible (ansible-role-mailclient) - changes here are overwritten
+{% macro calendar_entry(key, name, dav, color, user, identity, default) %}
+user_pref("calendar.registry.{{ key }}.type", "caldav");
+user_pref("calendar.registry.{{ key }}.name", {{ name | to_json }});
+user_pref("calendar.registry.{{ key }}.uri", {{ dav.url | to_json }});
+user_pref("calendar.registry.{{ key }}.username", {{ user | to_json }});
+user_pref("calendar.registry.{{ key }}.cache.enabled", true);
+user_pref("calendar.registry.{{ key }}.calendar-main-in-composite", true);
+{% if color %}
+user_pref("calendar.registry.{{ key }}.color", {{ color | to_json }});
+{% endif %}
+{% if default %}
+user_pref("calendar.registry.{{ key }}.calendar-main-default", true);
+{% endif %}
+user_pref("calendar.registry.{{ key }}.imip.identity.key", {{ identity | to_json }});
+{%- endmacro %}
+{# default calendar (new events) = the first account with a calendar #}
+{% set default_calendar = mailclient_accounts | selectattr('calendar') | map(attribute='id') | first | default('') %}
+{% set abooks = mailclient_accounts | selectattr('contacts') | map(attribute='id')
+                | map('regex_replace', '^(.*)$', 'jscarddav://abook-\\1.sqlite') | join(' ') %}
+{% for a in mailclient_accounts %}
+{% set acc = 'account_' ~ a.id %}
+{% set srv = 'server_' ~ a.id %}
+{% set idn = 'id_' ~ a.id %}
+{% set smtp = 'smtp_' ~ a.id %}
+{% set base = 'imap://' ~ a.login_quoted ~ '@' ~ a.imap.host %}
+
+// {{ a.label }}
+user_pref("mail.account.{{ acc }}.server", {{ srv | to_json }});
+user_pref("mail.account.{{ acc }}.identities", {{ idn | to_json }});
+user_pref("mail.server.{{ srv }}.type", "imap");
+user_pref("mail.server.{{ srv }}.name", {{ a.label | to_json }});
+user_pref("mail.server.{{ srv }}.hostname", {{ a.imap.host | to_json }});
+user_pref("mail.server.{{ srv }}.port", {{ a.imap.port }});
+user_pref("mail.server.{{ srv }}.socketType", {{ 3 if a.imap.security == 'ssl' else 2 }});
+user_pref("mail.server.{{ srv }}.userName", {{ a.login | to_json }});
+user_pref("mail.server.{{ srv }}.authMethod", 3);
+user_pref("mail.server.{{ srv }}.directory-rel", {{ ('[ProfD]ImapMail/' ~ a.id) | to_json }});
+user_pref("mail.server.{{ srv }}.login_at_startup", true);
+user_pref("mail.server.{{ srv }}.check_new_mail", true);
+user_pref("mail.server.{{ srv }}.delete_model", 2);
+user_pref("mail.server.{{ srv }}.using_subscription", false);
+user_pref("mail.server.{{ srv }}.moveOnSpam", true);
+user_pref("mail.server.{{ srv }}.spamActionTargetAccount", {{ base | to_json }});
+user_pref("mail.server.{{ srv }}.spamActionTargetFolder", {{ (base ~ '/' ~ a.folders.junk) | to_json }});
+user_pref("mail.server.{{ srv }}.whiteListAbURI", {{ abooks | to_json }});
+user_pref("mail.identity.{{ idn }}.valid", true);
+user_pref("mail.identity.{{ idn }}.fullName", {{ a.name | to_json }});
+user_pref("mail.identity.{{ idn }}.useremail", {{ a.address | to_json }});
+user_pref("mail.identity.{{ idn }}.smtpServer", {{ smtp | to_json }});
+user_pref("mail.identity.{{ idn }}.fcc_folder", {{ (base ~ '/' ~ a.folders.sent) | to_json }});
+user_pref("mail.identity.{{ idn }}.fcc_folder_picker_mode", "1");
+user_pref("mail.identity.{{ idn }}.fcc_reply_follows_parent", true);
+user_pref("mail.identity.{{ idn }}.draft_folder", {{ (base ~ '/' ~ a.folders.drafts) | to_json }});
+user_pref("mail.identity.{{ idn }}.drafts_folder_picker_mode", "1");
+user_pref("mail.identity.{{ idn }}.archive_folder", {{ (base ~ '/' ~ a.folders.archive) | to_json }});
+user_pref("mail.identity.{{ idn }}.archives_folder_picker_mode", "1");
+user_pref("mail.identity.{{ idn }}.stationery_folder", {{ (base ~ '/' ~ a.folders.templates) | to_json }});
+user_pref("mail.identity.{{ idn }}.tmpl_folder_picker_mode", "1");
+user_pref("mail.smtpserver.{{ smtp }}.type", "smtp");
+user_pref("mail.smtpserver.{{ smtp }}.description", {{ a.label | to_json }});
+user_pref("mail.smtpserver.{{ smtp }}.hostname", {{ a.smtp.host | to_json }});
+user_pref("mail.smtpserver.{{ smtp }}.port", {{ a.smtp.port }});
+user_pref("mail.smtpserver.{{ smtp }}.try_ssl", {{ 3 if a.smtp.security == 'ssl' else 2 }});
+user_pref("mail.smtpserver.{{ smtp }}.authMethod", 3);
+user_pref("mail.smtpserver.{{ smtp }}.username", {{ a.login | to_json }});
+{# one Thunderbird calendar per URL: the calendar (events + tasks), a task list with its own URL as a second one #}
+{% if a.calendar %}
+{{ calendar_entry('mailclient-' ~ a.id, a.label, a.calendar, a.color, a.dav_user, idn, a.id == default_calendar) }}
+{% endif %}
+{% if a.tasks_separate %}
+{{ calendar_entry('mailclient-' ~ a.id ~ '-tasks', a.label ~ (' Tasks' if a.calendar else ''), a.tasks, a.tasks_color,
+                  a.dav_user, idn, false) }}
+{% endif %}
+{% if a.contacts %}
+user_pref("ldap_2.servers.mailclient_{{ a.id }}.dirType", 102);
+user_pref("ldap_2.servers.mailclient_{{ a.id }}.description", {{ a.label | to_json }});
+user_pref("ldap_2.servers.mailclient_{{ a.id }}.filename", {{ ('abook-' ~ a.id ~ '.sqlite') | to_json }});
+user_pref("ldap_2.servers.mailclient_{{ a.id }}.carddav.url", {{ a.contacts.url | to_json }});
+user_pref("ldap_2.servers.mailclient_{{ a.id }}.carddav.username", {{ a.dav_user | to_json }});
+{% endif %}
+{% endfor %}
+
+// account list, Local Folders (Thunderbird's local account, kept so it isn't created anew at every start)
+user_pref("mail.account.account_local.server", "server_local");
+user_pref("mail.server.server_local.type", "none");
+user_pref("mail.server.server_local.name", "Local Folders");
+user_pref("mail.server.server_local.hostname", "Local Folders");
+user_pref("mail.server.server_local.userName", "nobody");
+user_pref("mail.server.server_local.directory-rel", "[ProfD]Mail/Local Folders");
+user_pref("mail.accountmanager.localfoldersserver", "server_local");
+user_pref("mail.accountmanager.accounts", {{ (mailclient_accounts | map(attribute='id') | map('regex_replace', '^(.*)$', 'account_\\1') | list + ['account_local']) | join(',') | to_json }});
+{% if mailclient_accounts %}
+user_pref("mail.accountmanager.defaultaccount", {{ ('account_' ~ mailclient_accounts[0].id) | to_json }});
+user_pref("mail.smtpservers", {{ mailclient_accounts | map(attribute='id') | map('regex_replace', '^(.*)$', 'smtp_\\1') | join(',') | to_json }});
+user_pref("mail.smtp.defaultserver", {{ ('smtp_' ~ mailclient_accounts[0].id) | to_json }});
+{% endif %}
+
+// message list: sorted by date, newest on top (folders without own view settings, i.e. all in a new profile)
+user_pref("mailnews.default_sort_type", 18);
+user_pref("mailnews.default_sort_order", 2);

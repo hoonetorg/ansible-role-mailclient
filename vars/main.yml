@@ -1,0 +1,15 @@
+---
+# packages per OS family and client (used if mailclient.packages doesn't set the client); Evolution also needs
+# gsettings and dbus-run-session (the role sets a GSettings key as the user; Leap 16.1: dbus-run-session is in
+# dbus-1-daemon, the system bus itself is dbus-broker; GSettings in dconf as on a GNOME desktop); secret-tool and dconf
+# for helpers/mailclient-reset.py
+mailclient_os_packages:
+  Suse:
+    evolution: [evolution, glib2-tools, gsettings-backend-dconf, dbus-1-daemon, secret-tool, dconf]
+    thunderbird: [MozillaThunderbird]
+  RedHat:
+    evolution: [evolution, glib2, dbus-daemon, libsecret, dconf]
+    thunderbird: [thunderbird]
+  Debian:
+    evolution: [evolution, libglib2.0-bin, dbus-daemon, libsecret-tools, dconf-cli]
+    thunderbird: [thunderbird]

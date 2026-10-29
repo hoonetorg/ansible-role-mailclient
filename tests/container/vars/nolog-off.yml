@@ -1,0 +1,8 @@
+---
+mailclient:
+  no_log: false
+  clients: [thunderbird]
+  users:
+    - user: teste
+      accounts:
+        - {id: frank, address: frank@example.org, provider: united-domains, login: exampleorg-0003}

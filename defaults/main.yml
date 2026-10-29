@@ -1,0 +1,44 @@
+---
+# Merged (recursively) with the inventory variable `mailclient` into `mailclient_final`.
+mailclient_defaults:
+  # which clients to install and configure: evolution, thunderbird or both
+  clients: [evolution, thunderbird]
+  # packages per client; empty: from vars/main.yml for the OS family (Suse: evolution, MozillaThunderbird)
+  packages: {}
+
+  # mail/calendar/contacts providers (public server data only); accounts refer to them with `provider`, the
+  # inventory can add more (e.g. a test server)
+  #   imap/smtp: host, port, security (ssl = TLS from the start | starttls)
+  #   calendar_url/contacts_url: optional URL pattern, {address} = the account's address
+  #   folders: special folders on the server, overrides `folders` below
+  providers:
+    # https://www.infomaniak.com/en/support/faq/468 (465/ssl also possible for SMTP); login = full address.
+    # Calendar/contacts: https://sync.infomaniak.com, login = short name (e.g. AB12345) + app password; the
+    # exact URLs per account come from the sync wizard (config.infomaniak.com → GNU/Linux, step 4) → account
+    # fields dav_user, calendar_url, contacts_url
+    infomaniak:
+      imap: {host: mail.infomaniak.com, port: 993, security: ssl}
+      smtp: {host: mail.infomaniak.com, port: 587, security: starttls}
+    # united-domains mail package: login = mailbox name from the customer menu (e.g. musterdomainde-0001) →
+    # account field login; calendar/contacts: URLs per account, the task list has its own URL (tasks_url)
+    united-domains:
+      imap: {host: imaps.udag.de, port: 993, security: ssl}
+      smtp: {host: smtps.udag.de, port: 587, security: starttls}
+
+  # special folders on the server (defaults for all providers)
+  folders:
+    sent: Sent
+    drafts: Drafts
+    archive: Archive
+    junk: Junk
+    templates: Templates
+
+  # users and their accounts, see README.md
+  users: []
+
+  # Thunderbird's hash of its install directory (profiles.ini [Install<hash>], installs.ini); this one is
+  # /usr/lib64/thunderbird (openSUSE)
+  thunderbird_install_hash: 3DDF446CE6CB1A45
+
+  # hide file contents (diffs) and account data in the output; false only for debugging with fake data
+  no_log: true

@@ -1,0 +1,28 @@
+{% set a = source.account %}
+[Data Source]
+DisplayName={{ a.label }}
+Enabled=true
+Parent=
+
+[Mail Account]
+BackendName=imapx
+IdentityUid=mailclient-mail-{{ a.id }}-identity
+ArchiveFolder=folder://mailclient-mail-{{ a.id }}/{{ a.folders.archive }}
+NeedsInitialSetup=false
+
+[Authentication]
+Host={{ a.imap.host }}
+Method=none
+Port={{ a.imap.port }}
+User={{ a.login }}
+RememberPassword=true
+
+[Security]
+Method={{ 'ssl-on-alternate-port' if a.imap.security == 'ssl' else 'starttls-on-standard-port' }}
+
+{# no real Trash (delete = gone), all folders (not only subscribed ones), junk to the server's junk folder #}
+[Imapx Backend]
+UseRealTrashPath=false
+UseRealJunkPath=true
+RealJunkPath={{ a.folders.junk }}
+UseSubscriptions=false

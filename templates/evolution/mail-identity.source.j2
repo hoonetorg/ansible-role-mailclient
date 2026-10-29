@@ -1,0 +1,20 @@
+{% set a = source.account %}
+[Data Source]
+DisplayName={{ a.label }}
+Enabled=true
+Parent=mailclient-mail-{{ a.id }}
+
+{# replies and forwards are saved in the folder of the original message #}
+[Mail Submission]
+SentFolder=folder://mailclient-mail-{{ a.id }}/{{ a.folders.sent }}
+TransportUid=mailclient-mail-{{ a.id }}-transport
+RepliesToOriginFolder=true
+UseSentFolder=true
+
+[Mail Composition]
+DraftsFolder=folder://mailclient-mail-{{ a.id }}/{{ a.folders.drafts }}
+TemplatesFolder=folder://mailclient-mail-{{ a.id }}/{{ a.folders.templates }}
+
+[Mail Identity]
+Address={{ a.address }}
+Name={{ a.name }}

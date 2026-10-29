@@ -1,0 +1,23 @@
+---
+- name: Look up user {{ mailclient_user.user }}
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ mailclient_user.user }}"
+
+- name: Set user data
+  ansible.builtin.set_fact:
+    mailclient_uid: "{{ getent_passwd[mailclient_user.user][1] }}"
+    mailclient_gid: "{{ getent_passwd[mailclient_user.user][2] }}"
+    mailclient_home: "{{ getent_passwd[mailclient_user.user][4] }}"
+    mailclient_accounts: >-
+      {{ (mailclient_user.accounts | default([]))
+         | mailclient_accounts(mailclient_final.providers, mailclient_final.folders, mailclient_user.user) }}
+  no_log: true
+
+- name: Configure Evolution
+  ansible.builtin.include_tasks: evolution.yml
+  when: "'evolution' in mailclient_final.clients"
+
+- name: Configure Thunderbird
+  ansible.builtin.include_tasks: thunderbird.yml
+  when: "'thunderbird' in mailclient_final.clients"

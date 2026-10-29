@@ -1,0 +1,7 @@
+---
+mailclient:
+  users:
+    - user: teste
+      accounts:
+        - {id: frank, address: frank@example.org, provider: united-domains, calendar_url: "https://dav.example.org/c/",
+           color: "blue"}

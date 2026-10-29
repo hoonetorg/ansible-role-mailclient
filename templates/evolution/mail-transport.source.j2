@@ -1,0 +1,18 @@
+{% set a = source.account %}
+[Data Source]
+DisplayName={{ a.label }}
+Enabled=true
+Parent=mailclient-mail-{{ a.id }}
+
+[Authentication]
+Host={{ a.smtp.host }}
+Method=PLAIN
+Port={{ a.smtp.port }}
+User={{ a.login }}
+RememberPassword=true
+
+[Security]
+Method={{ 'ssl-on-alternate-port' if a.smtp.security == 'ssl' else 'starttls-on-standard-port' }}
+
+[Mail Transport]
+BackendName=smtp

@@ -1,0 +1,33 @@
+{# CalDAV calendar / task list or CardDAV address book: source.kind = Calendar | Task List | Address Book #}
+{% set a = source.account %}
+{% set book = source.kind == 'Address Book' %}
+[Data Source]
+DisplayName={{ a.label }}
+Enabled=true
+Parent={{ 'carddav-stub' if book else 'caldav-stub' }}
+
+[Authentication]
+Host={{ source.dav.host }}
+Method=plain/password
+Port={{ source.dav.port }}
+User={{ a.dav_user }}
+RememberPassword=true
+
+[Security]
+Method={{ 'tls' if source.dav.tls else 'none' }}
+
+[WebDAV Backend]
+ResourcePath={{ source.dav.path }}
+{% if not book %}
+EmailAddress={{ a.address }}
+CalendarAutoSchedule=true
+{% endif %}
+
+[{{ source.kind }}]
+BackendName={{ 'carddav' if book else 'caldav' }}
+{% if source.color | default(none) %}
+Color={{ source.color }}
+{% endif %}
+{% if not book %}
+Selected=true
+{% endif %}
