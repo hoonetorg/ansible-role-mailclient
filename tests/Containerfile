@@ -1,6 +1,13 @@
-# Test image for ansible-role-mailclient: openSUSE Leap 16.1 with ansible (incl. community.general: zypper) and the packages the role installs
-# (preinstalled, so the role's package task finds them), plus shadow for the fake test users
+# Test image for ansible-role-mailclient: openSUSE Leap 16.1 with the packages the role installs (preinstalled,
+# so the role's package task finds them), shadow for the fake test users, and as ansible exactly what the nsbldr
+# image provides: built by controller.sh (ANSIBLE_PINS, collections/ copied out of the nsbldr image)
 FROM registry.opensuse.org/opensuse/leap:16.1
-RUN zypper -n in --no-recommends ansible evolution MozillaThunderbird glib2-tools dbus-1-daemon dconf gsettings-backend-dconf secret-tool util-linux \
+ARG ANSIBLE_PINS
+RUN zypper -n in --no-recommends python3 evolution MozillaThunderbird glib2-tools dbus-1-daemon dconf gsettings-backend-dconf secret-tool util-linux \
       shadow findutils procps \
  && zypper clean -a
+RUN test -n "$ANSIBLE_PINS" \
+ && python3 -m venv /opt/ansible \
+ && /opt/ansible/bin/pip install --no-cache-dir $ANSIBLE_PINS
+COPY collections /usr/share/ansible/collections
+ENV PATH=/opt/ansible/bin:$PATH

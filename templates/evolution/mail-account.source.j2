@@ -20,9 +20,17 @@ RememberPassword=true
 [Security]
 Method={{ 'ssl-on-alternate-port' if a.imap.security == 'ssl' else 'starttls-on-standard-port' }}
 
-{# no real Trash (delete = gone), all folders (not only subscribed ones), junk to the server's junk folder #}
+{# no real Trash (delete = gone), all folders (not only subscribed ones), junk to the server's junk folder;
+   all folders checked and kept locally (search incl. regex works on all mail), QRESYNC if the server has it #}
 [Imapx Backend]
 UseRealTrashPath=false
 UseRealJunkPath=true
 RealJunkPath={{ a.folders.junk }}
 UseSubscriptions=false
+CheckAll=true
+StaySynchronized=true
+UseQresync=true
+
+{# what Evolution's "Synchronize remote mail locally in all folders" shows and uses; it writes both #}
+[Offline]
+StaySynchronized=true

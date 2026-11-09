@@ -20,6 +20,10 @@ calendar and task list (CalDAV), address book (CardDAV). Same behaviour in both 
   asks at start to become the default. The inventory decides: a change in GNOME Settings is set back at the next
   run (`default_client: ''` leaves it to the user)
 - Evolution: the contacts of the server address books are in the "Birthdays & Anniversaries" calendar
+- all folders checked for new mail and kept on the computer (search works on all mail, also offline):
+  Evolution "Check for new messages in all folders", "Synchronize remote mail locally in all folders", "Use
+  Quick Resync if the server supports it" (Receiving Options); Thunderbird does both by default. The first sync
+  downloads all mail
 
 No password is stored in any file: each client asks once per account (Evolution: GNOME keyring, Thunderbird:
 its own password manager). Thunderbird asks for a calendar's login in a plain dialog that shows only the server,
@@ -54,6 +58,19 @@ The role **stops** (fails, changes nothing for that user) when:
 - `default_client` is not one of `clients` (or has no desktop entry for the OS family)
 
 Not done: removing a user from `users` or a client from `clients` leaves that user's files/packages in place.
+
+## Searching
+
+Search on the server (Thunderbird "Run search on server") depends on the server: one matches whole words
+(`word1-word2` finds "word1 word2"), another only the exact text. Search the local copies instead, same rules for
+all accounts:
+
+- Thunderbird: Ctrl+Shift+F, account, "Search subfolders", "Run search on server" off; no wildcards - for
+  "word1 word2" / "word1-word2" two conditions "Body contains word1" and "Body contains word2", "Match all".
+  "Save as Search Folder" keeps it. The search box at the top uses Thunderbird's word index (complete once
+  Tools → Activity Manager shows no more indexing).
+- Evolution: the search bar searches the current folder (scope "All Accounts" next to it). Search → Advanced
+  Search → "Regex Match" → "Message Body", e.g. `word1[- ]word2` or `invoices?`; "Search Folders" keep it.
 
 ## Start over: `helpers/mailclient-reset.py`
 
@@ -184,6 +201,12 @@ INBOX/Spam}` - both clients write folder paths with `/`.
 tests/run-container.sh          # ~1 min (first run builds the test image: Leap 16.1 + ansible + the clients)
 tests/run-container.sh build    # rebuild the test image after changing tests/Containerfile
 ```
+
+The ansible in the test image is the one of the nsbldr image (`localhost/nsbldr:latest`, the production
+controller): `tests/controller.sh` reads ansible-core, its Python dependencies and the collections the role
+uses from it (copied out of it, nothing from Galaxy), prints them at the start of every run and rebuilds the
+test image when they changed (label `controller.versions` of the test image). `NSBLDR_IMAGE=...` for another one.
+
 
 Runs the role in a throwaway Leap 16.1 container (deleted afterwards, `--rm`) with fake users and fake accounts
 (`tests/container/vars/`): files and their content, GSettings value with and without a session bus, second run

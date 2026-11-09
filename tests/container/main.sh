@@ -86,6 +86,9 @@ check "alice: IMAP localhost:10993 SSL, login = address" \
 check "alice: no real Trash, all folders, junk folder Junk" \
   grep -Pzq 'UseRealTrashPath=false\nUseRealJunkPath=true\nRealJunkPath=Junk\nUseSubscriptions=false' \
   "$A/mailclient-mail-alice.source"
+check "alice: all folders checked, kept locally, QRESYNC" \
+  grep -Pzq 'UseSubscriptions=false\nCheckAll=true\nStaySynchronized=true\nUseQresync=true\n\n\[Offline\]\nStaySynchronized=true\n' \
+  "$A/mailclient-mail-alice.source"
 check "alice: replies to origin folder, Sent" \
   grep -Pzq 'SentFolder=folder://mailclient-mail-alice/Sent\nTransportUid=mailclient-mail-alice-transport\nRepliesToOriginFolder=true' \
   "$A/mailclient-mail-alice-identity.source"
